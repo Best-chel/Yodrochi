@@ -6,7 +6,7 @@ from aiogram.filters import CommandStart
 from dotenv import load_dotenv
 
 # Загружаем переменные из файла .env (если он существует локально)
-load_dotenv()
+load_dotenv(override=True)
 
 # Получаем данные из переменных окружения
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
