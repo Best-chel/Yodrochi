@@ -73,7 +73,15 @@ async def handle_user_message(message: Message, state: FSMContext):
 # Обработчик кнопки "Отправить ещё"
 @dp.callback_query(F.data == "user_reply")
 async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
-    await send_instruction(callback.message, state)
+    # 1. Разрешаем пользователю писать
+    await state.set_state(UserState.waiting_for_message)
+
+    # 2. Мгновенно редактируем старое сообщение (удаляем кнопку и меняем текст)
+    await callback.message.edit_text(
+        text="✍️ Слушаю вас, присылайте сообщение:",
+        reply_markup=None # Кнопка исчезнет
+    )
+
     await callback.answer()
 
 # Когда админ нажал на кнопку "Ответить"
