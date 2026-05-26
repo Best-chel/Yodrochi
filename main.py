@@ -76,10 +76,11 @@ async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
     # 1. Разрешаем пользователю писать
     await state.set_state(UserState.waiting_for_message)
 
-    # 2. Мгновенно редактируем старое сообщение (удаляем кнопку и меняем текст)
+    # 2. Редактируем сообщение: оставляем старый текст, но убираем кнопку
+    # Мы оставляем сообщение "✅ Сообщение отправлено..." на месте
     await callback.message.edit_text(
-        text="✍️ Слушаю вас, присылайте сообщение:",
-        reply_markup=None # Кнопка исчезнет
+        text=callback.message.text + "\n\n✍️ *Теперь напишите ваше новое сообщение:*",
+        reply_markup=None # Кнопка удалится, а текст останется
     )
 
     await callback.answer()
