@@ -47,7 +47,7 @@ async def handle_user_message(message: Message, state: FSMContext):
     # Невидимая ссылка для привязки ID (позволяет админу отвечать свайпом на сообщение)
     invisible_link = f'<a href="tg://user?id={message.from_user.id}">&#8203;</a>'
 
-    # 1. Отправляем сообщение подписчика (объединяем уведомление и контент в одно сообщение)
+    # 1. Отправляем сообщение подписчика
     caption_supported = message.content_type not in [
         'sticker', 'video_note', 'location', 'contact', 'poll', 'dice'
     ]
@@ -56,6 +56,7 @@ async def handle_user_message(message: Message, state: FSMContext):
         msg_text = (
             f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
             f"{message.html_text}\n\n"
+            "👉 https://t.me/anonim_the_best_bot?start=start\n"
             "↩️ Свайпни для ответа."
         )
         await bot.send_message(chat_id=ADMIN_ID, text=msg_text, parse_mode="HTML")
@@ -64,6 +65,7 @@ async def handle_user_message(message: Message, state: FSMContext):
         new_caption = f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
         if caption:
             new_caption += f"{caption}\n\n"
+        new_caption += "👉 https://t.me/anonim_the_best_bot?start=start\n"
         new_caption += "↩️ Свайпни для ответа."
 
         await bot.copy_message(
@@ -74,8 +76,7 @@ async def handle_user_message(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
     else:
-        # Для стикеров и кружков невозможно прикрепить текст - отправляем как есть,
-        # так как это ограничение самого Telegram, но кнопка и данные все равно придут вторым сообщением
+        # Для стикеров и кружков отправляем само медиа как есть
         await bot.copy_message(chat_id=ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
 
     # 2. Создаем кнопку "Ответить" и отправляем данные отправителя
