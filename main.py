@@ -93,7 +93,7 @@ async def handle_user_message(message: Message, state: FSMContext):
 
     # 3. Ответ пользователю (для него ничего не изменилось)
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Отправить ещё", callback_data="user_reply")
+        InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
     ]])
 
     await message.answer("💬 Сообщение отправлено, ожидайте ответ!", reply_markup=user_builder)
@@ -169,7 +169,7 @@ async def send_reply(message: Message, state: FSMContext):
     user_name = data.get("user_name")
 
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
+        InlineKeyboardButton(text="Отправить ещё", callback_data="user_reply")
     ]])
 
     try:
