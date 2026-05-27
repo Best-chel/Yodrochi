@@ -70,20 +70,47 @@ async def handle_user_message(message: Message, state: FSMContext):
     await message.answer("💬 Сообщение отправлено, ожидайте ответ!", reply_markup=user_builder)
     await state.clear()
 
-# Обработчик кнопки "Отправить ещё"
-@dp.callback_query(F.data == "user_reply")
-async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
-    # 1. Разрешаем пользователю писать
-    await state.set_state(UserState.waiting_for_message)
+# Обработка входящих от пользователей
+@dp.message(F.chat.type == "private", ~F.chat.id.in_(ADMIN_IDS), UserState.waiting_for_message)
+async def handle_user_message(message: Message, state: FSMContext):
+    # 1. Текст и само сообщение (первое сообщение)
+    user_text = message.text or "Пользователь прислал медиа"
 
-    # 2. Редактируем сообщение: оставляем старый текст, но убираем кнопку
-    # Мы оставляем сообщение "✅ Сообщение отправлено..." на месте
-    await callback.message.edit_text(
-        text=callback.message.text + "\n\n✍️ Теперь напишите ваше новое сообщение:",
-        reply_markup=None # Кнопка удалится, а текст останется
+    first_block = (
+        f"🏄‍♂️ У тебя новое анонимное сообщение!\n\n"
+        f"\"{user_text}\"\n\n"
+        f"↩️ Свайпни для ответа."
     )
 
-    await callback.answer()
+    # 2. Данные отправителя (второе сообщение)
+    admin_builder = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💬 Ответить", callback_data=f"reply_{message.from_user.id}")
+    ]])
+
+    second_block = (
+        f"👤 От: {message.from_user.full_name} (@{message.from_user.username or 'нет юзернейма'})\n"
+        f"🆔 ID: {message.from_user.id}\n\n"
+        f"↩️ Нажми кнопку ниже для ответа."
+    )
+
+    for admin_id in ADMIN_ID:
+        # Отправляем первое сообщение
+        await bot.send_message(chat_id=admin_id, text=first_block)
+
+        # Если это медиа, копируем его между сообщениями
+        if message.content_type != 'text':
+             await bot.copy_message(chat_id=admin_id, from_chat_id=message.chat.id, message_id=message.message_id)
+
+        # Отправляем второе сообщение с кнопкой
+        await bot.send_message(chat_id=admin_id, text=second_block, reply_markup=admin_builder)
+
+    # 3. Ответ пользователю
+    user_builder = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
+    ]])
+
+    await message.answer("💬 Сообщение отправлено, ожидайте ответ!", reply_markup=user_builder)
+    await state.clear()
 
 # Когда админ нажал на кнопку "Ответить"
 @dp.callback_query(F.data.startswith("reply_"))
