@@ -169,7 +169,7 @@ async def send_reply(message: Message, state: FSMContext):
     user_name = data.get("user_name")
 
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Отправить ещё", callback_data="user_reply")
+        InlineKeyboardButton(text="Ответить", callback_data="user_reply")
     ]])
 
     try:
