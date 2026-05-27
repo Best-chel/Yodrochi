@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from aiogram.filters import CommandStart
@@ -43,18 +44,45 @@ async def start_cmd(message: Message, state: FSMContext):
 # Обработка входящих от пользователей
 @dp.message(F.chat.type == "private", F.chat.id != ADMIN_ID, UserState.waiting_for_message)
 async def handle_user_message(message: Message, state: FSMContext):
-    # 1. Отправляем админу уведомление
-    await bot.send_message(chat_id=ADMIN_ID, text="🏄‍♂️ У тебя новое сообщение:")
+    # Невидимая ссылка для привязки ID (позволяет админу отвечать свайпом на сообщение)
+    invisible_link = f'<a href="tg://user?id={message.from_user.id}">&#8203;</a>'
 
-    # Копируем сообщение пользователя (медиа или текст)
-    await bot.copy_message(chat_id=ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
+    # 1. Отправляем сообщение подписчика (объединяем уведомление и контент в одно сообщение)
+    caption_supported = message.content_type not in [
+        'sticker', 'video_note', 'location', 'contact', 'poll', 'dice'
+    ]
 
-    # 2. Создаем кнопку "Ответить"
+    if message.text:
+        msg_text = (
+            f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
+            f"{message.html_text}\n\n"
+            "↩️ Свайпни для ответа."
+        )
+        await bot.send_message(chat_id=ADMIN_ID, text=msg_text, parse_mode="HTML")
+    elif caption_supported:
+        caption = message.html_text if message.caption else ""
+        new_caption = f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
+        if caption:
+            new_caption += f"{caption}\n\n"
+        new_caption += "↩️ Свайпни для ответа."
+
+        await bot.copy_message(
+            chat_id=ADMIN_ID,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id,
+            caption=new_caption,
+            parse_mode="HTML"
+        )
+    else:
+        # Для стикеров и кружков невозможно прикрепить текст - отправляем как есть,
+        # так как это ограничение самого Telegram, но кнопка и данные все равно придут вторым сообщением
+        await bot.copy_message(chat_id=ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
+
+    # 2. Создаем кнопку "Ответить" и отправляем данные отправителя
     admin_builder = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="💬 Ответить", callback_data=f"reply_{message.from_user.id}")
     ]])
 
-    # 3. Отправляем данные отправителя
     admin_info = (
         f"👤 От: {message.from_user.full_name} (@{message.from_user.username or 'нет юзернейма'})\n"
         f"🆔 ID: {message.from_user.id}\n\n"
@@ -62,7 +90,7 @@ async def handle_user_message(message: Message, state: FSMContext):
     )
     await bot.send_message(chat_id=ADMIN_ID, text=admin_info, reply_markup=admin_builder)
 
-    # 4. Ответ пользователю
+    # 3. Ответ пользователю (для него ничего не изменилось)
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
     ]])
@@ -73,17 +101,52 @@ async def handle_user_message(message: Message, state: FSMContext):
 # Обработчик кнопки "Отправить ещё"
 @dp.callback_query(F.data == "user_reply")
 async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
-    # 1. Разрешаем пользователю писать
     await state.set_state(UserState.waiting_for_message)
-
-    # 2. Редактируем сообщение: оставляем старый текст, но убираем кнопку
-    # Мы оставляем сообщение "✅ Сообщение отправлено..." на месте
     await callback.message.edit_text(
         text=callback.message.text + "\n\n✍️ Теперь напишите ваше новое сообщение:",
-        reply_markup=None # Кнопка удалится, а текст останется
+        reply_markup=None
     )
-
     await callback.answer()
+
+# Обработка ответа "свайпом" от админа
+@dp.message(F.chat.type == "private", F.chat.id == ADMIN_ID, F.reply_to_message)
+async def admin_swipe_reply_handler(message: Message, state: FSMContext):
+    user_id = None
+    reply_msg = message.reply_to_message
+
+    # 1. Пытаемся найти ID в скрытой ссылке (если админ свайпнул на само сообщение от пользователя)
+    entities = reply_msg.entities or reply_msg.caption_entities or []
+    for ent in entities:
+        if ent.type == 'text_link' and ent.url and ent.url.startswith("tg://user?id="):
+            user_id = ent.url.split("=")[1]
+            break
+
+    # 2. Если не нашли ссылку, ищем ID в тексте (если админ свайпнул на второе сообщение, где указан ID)
+    if not user_id and reply_msg.text:
+        match = re.search(r"🆔 ID: (\d+)", reply_msg.text)
+        if match:
+            user_id = match.group(1)
+
+    # Если удалось найти получателя
+    if user_id:
+        user_builder = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
+        ]])
+        try:
+            await bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=message.chat.id,
+                message_id=message.message_id,
+                reply_markup=user_builder
+            )
+            await message.answer("✅ Ответ успешно отправлен пользователю!")
+        except Exception as e:
+            await message.answer(f"❌ Ошибка при отправке: {e}")
+
+        await state.clear()
+    else:
+        # Если админ свайпнул на сообщение, к которому нельзя привязать ID (например на голый стикер)
+        await message.answer("❌ Не удалось определить получателя. Пожалуйста, используйте кнопку «💬 Ответить» под вторым сообщением.")
 
 # Когда админ нажал на кнопку "Ответить"
 @dp.callback_query(F.data.startswith("reply_"))
@@ -97,25 +160,23 @@ async def start_reply(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(f"✍️ Введите ответ для пользователя {user_name}:")
     await callback.answer()
 
-# Когда админ отправил текст ответа
+# Когда админ отправил текст ответа (после нажатия кнопки)
 @dp.message(AdminReply.waiting_for_reply)
 async def send_reply(message: Message, state: FSMContext):
     data = await state.get_data()
     user_id = data.get("user_id")
     user_name = data.get("user_name")
 
-    # Создаем кнопку для пользователя
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="Отправить ещё", callback_data="user_reply")
+        InlineKeyboardButton(text="✍️ Отправить ещё", callback_data="user_reply")
     ]])
 
     try:
-        # Отправляем пользователю ответ и кнопку
         await bot.copy_message(
             chat_id=user_id,
             from_chat_id=message.chat.id,
             message_id=message.message_id,
-            reply_markup=user_builder # Добавили кнопку сюда!
+            reply_markup=user_builder
         )
         await message.answer(f"✅ Ответ успешно отправлен пользователю {user_name}!")
     except Exception as e:
