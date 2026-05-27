@@ -71,7 +71,7 @@ async def handle_user_message(message: Message, state: FSMContext):
     await state.clear()
 
 # Обработка входящих от пользователей
-@dp.message(F.chat.type == "private", ~F.chat.id.in_(ADMIN_IDS), UserState.waiting_for_message)
+@dp.message(F.chat.type == "private", ~F.chat.id.in_(ADMIN_ID), UserState.waiting_for_message)
 async def handle_user_message(message: Message, state: FSMContext):
     # 1. Текст и само сообщение (первое сообщение)
     user_text = message.text or "Пользователь прислал медиа"
