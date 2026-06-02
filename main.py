@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Загружаем переменные
 load_dotenv(override=True)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-# Список админов (если один, тоже работает отлично)
+# Список админов (если один, тоже работает отличноо)
 ADMIN_IDS = [int(id.strip()) for id in os.environ.get("ADMIN_IDS", "").split(",") if id.strip()]
 
 bot = Bot(token=BOT_TOKEN)
