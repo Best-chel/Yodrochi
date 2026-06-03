@@ -198,22 +198,19 @@ async def handle_user_message(message: Message, state: FSMContext):
 
 
 
-# Обработчик кнопки "Отправить ещё"
-
+# Обработчик кнопки "Отправить ещё" / "Ответить"
 @dp.callback_query(F.data == "user_reply")
-
 async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
-
     await state.set_state(UserState.waiting_for_message)
 
-    await callback.message.edit_text(
+    # Пытаемся убрать кнопку под сообщением (работает для всех типов, включая стикеры и медиа)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass  # Игнорируем, если по какой-то причине не удалось удалить кнопку
 
-        text=callback.message.text + "\n\n✍️ Теперь напишите ваше новое сообщение:",
-
-        reply_markup=None
-
-    )
-
+    # Отправляем пользователю новое сообщение с инструкцией
+    await callback.message.answer("✍️ Теперь напишите ваше новое сообщение:")
     await callback.answer()
 
 
