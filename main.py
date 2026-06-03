@@ -59,6 +59,17 @@ async def start_cmd(message: Message, state: FSMContext):
 # Обработка входящих от пользователей
 @dp.message(F.chat.type == "private", F.chat.id != ADMIN_ID, UserState.waiting_for_message)
 async def handle_user_message(message: Message, state: FSMContext):
+    # 0. Удаляем сообщение-подсказку "Теперь напишите ваше новое сообщение:", если оно было сохранено
+    user_data = await state.get_data()
+    prompt_msg_id = user_data.get("prompt_msg_id")
+    if prompt_msg_id:
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=prompt_msg_id)
+        except Exception:
+            pass
+        # Стираем ID подсказки из памяти, так как она уже удалена
+        await state.update_data(prompt_msg_id=None)
+
     invisible_link = f'<a href="tg://user?id={message.from_user.id}">&#8203;</a>'
 
     # 1. Отправляем сообщение подписчика
@@ -90,6 +101,7 @@ async def handle_user_message(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
     else:
+        # Для стикеров и кружков отправляем само медиа как есть
         await bot.copy_message(chat_id=ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
 
     # 2. Создаем кнопку "Ответить" и отправляем данные отправителя
@@ -109,7 +121,12 @@ async def handle_user_message(message: Message, state: FSMContext):
     ]])
 
     sent_msg = await message.answer("💬 Сообщение отправлено, ожидайте ответ!", reply_markup=user_builder)
+
+    # Сохраняем ID отправленного уведомления, чтобы удалить его позже
     await state.update_data(last_sent_msg_id=sent_msg.message_id)
+
+    # Сбрасываем только состояние (чтобы пользователь мог свободно нажимать кнопки),
+    # но сохраняем его данные (для этого вместо clear() переключаем состояние в None)
     await state.set_state(None)
 
 # Обработчик кнопки "Отправить ещё" / "Ответить"
@@ -128,7 +145,11 @@ async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
         except Exception:
             pass
 
-    await callback.message.answer("✍️ Теперь напишите ваше новое сообщение:")
+    prompt_msg = await callback.message.answer("✍️ Теперь напишите ваше новое сообщение:")
+
+    # --- ЭТУ СТРОКУ НУЖНО ДОБАВИТЬ ---
+    await state.update_data(prompt_msg_id=prompt_msg.message_id)
+    # ---------------------------------
     await callback.answer()
 
 # Обработка ответа "свайпом" от админа
