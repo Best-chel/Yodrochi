@@ -7,7 +7,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.storage.base import StorageKey  # Добавили импорт StorageKey для управления контекстом пользователя
+from aiogram.fsm.storage.base import StorageKey
 from dotenv import load_dotenv
 
 # Загружаем переменные
@@ -27,11 +27,9 @@ class UserState(StatesGroup):
 
 # Вспомогательная функция для удаления предыдущего уведомления у пользователя
 async def delete_user_last_msg(bot: Bot, user_id: int):
-    # Получаем FSM-контекст конкретного пользователя по его ID
     user_key = StorageKey(bot_id=bot.id, chat_id=user_id, user_id=user_id)
     user_context = FSMContext(storage=dp.storage, key=user_key)
 
-    # Извлекаем ID последнего отправленного ботом уведомления "Сообщение отправлено..."
     user_data = await user_context.get_data()
     last_msg_id = user_data.get("last_sent_msg_id")
 
@@ -39,7 +37,7 @@ async def delete_user_last_msg(bot: Bot, user_id: int):
         try:
             await bot.delete_message(chat_id=user_id, message_id=last_msg_id)
         except Exception:
-            pass  # Игнорируем ошибку, если сообщение уже было удалено пользователем
+            pass
 
 # Вспомогательная функция для инструкции
 async def send_instruction(message: Message, state: FSMContext):
@@ -61,7 +59,6 @@ async def start_cmd(message: Message, state: FSMContext):
 # Обработка входящих от пользователей
 @dp.message(F.chat.type == "private", F.chat.id != ADMIN_ID, UserState.waiting_for_message)
 async def handle_user_message(message: Message, state: FSMContext):
-    # Невидимая ссылка для привязки ID (позволяет админу отвечать свайпом на сообщение)
     invisible_link = f'<a href="tg://user?id={message.from_user.id}">&#8203;</a>'
 
     # 1. Отправляем сообщение подписчика
@@ -93,7 +90,6 @@ async def handle_user_message(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
     else:
-        # Для стикеров и кружков отправляем само медиа как есть
         await bot.copy_message(chat_id=ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
 
     # 2. Создаем кнопку "Ответить" и отправляем данные отправителя
@@ -113,11 +109,7 @@ async def handle_user_message(message: Message, state: FSMContext):
     ]])
 
     sent_msg = await message.answer("💬 Сообщение отправлено, ожидайте ответ!", reply_markup=user_builder)
-
-    # Сохраняем ID отправленного уведомления, чтобы удалить его при ответе админа
     await state.update_data(last_sent_msg_id=sent_msg.message_id)
-
-    # Сбрасываем только состояние, но НЕ очищаем сохраненные данные (вместо clear() используем set_state(None))
     await state.set_state(None)
 
 # Обработчик кнопки "Отправить ещё" / "Ответить"
@@ -125,14 +117,12 @@ async def handle_user_message(message: Message, state: FSMContext):
 async def user_reply_handler(callback: CallbackQuery, state: FSMContext):
     await state.set_state(UserState.waiting_for_message)
 
-    # Если это было сообщение бота "💬 Сообщение отправлено...", удаляем его полностью
     if callback.message.text and "Сообщение отправлено" in callback.message.text:
         try:
             await callback.message.delete()
         except Exception:
             pass
     else:
-        # Если это было сообщение от админа (текст, медиа, стикеры), просто убираем кнопку
         try:
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
@@ -147,24 +137,19 @@ async def admin_swipe_reply_handler(message: Message, state: FSMContext):
     user_id = None
     reply_msg = message.reply_to_message
 
-    # 1. Пытаемся найти ID в скрытой ссылке (если админ свайпнул на само сообщение от пользователя)
     entities = reply_msg.entities or reply_msg.caption_entities or []
     for ent in entities:
         if ent.type == 'text_link' and ent.url and ent.url.startswith("tg://user?id="):
             user_id = ent.url.split("=")[1]
             break
 
-    # 2. Если не нашли ссылку, ищем ID в тексте (если админ свайпнул на второе сообщение, где указан ID)
     if not user_id and reply_msg.text:
         match = re.search(r"🆔 ID: (\d+)", reply_msg.text)
         if match:
             user_id = match.group(1)
 
-    # Если удалось найти получателя
     if user_id:
         user_id = int(user_id)
-
-        # Удаляем предыдущее сообщение-уведомление бота у пользователя
         await delete_user_last_msg(bot, user_id)
 
         user_builder = InlineKeyboardMarkup(inline_keyboard=[[
@@ -183,14 +168,12 @@ async def admin_swipe_reply_handler(message: Message, state: FSMContext):
 
         await state.clear()
     else:
-        # Если админ свайпнул на сообщение, к которому нельзя привязать ID (например на голый стикер)
         await message.answer("❌ Не удалось определить получателя. Пожалуйста, используйте кнопку «💬 Ответить» под вторым сообщением.")
 
 # Когда админ нажал на кнопку "Ответить"
 @dp.callback_query(F.data.startswith("reply_"))
 async def start_reply(callback: CallbackQuery, state: FSMContext):
     user_id = callback.data.split("_")[1]
-    # Берем имя из текста сообщения
     user_name = callback.message.text.split("\n")[0].replace("👤 От: ", "")
 
     await state.update_data(user_id=user_id, user_name=user_name)
@@ -207,7 +190,6 @@ async def send_reply(message: Message, state: FSMContext):
 
     if user_id:
         user_id = int(user_id)
-        # Удаляем предыдущее сообщение-уведомление бота у пользователя
         await delete_user_last_msg(bot, user_id)
 
     user_builder = InlineKeyboardMarkup(inline_keyboard=[[
@@ -226,6 +208,26 @@ async def send_reply(message: Message, state: FSMContext):
         await message.answer(f"❌ Ошибка при отправке: {e}")
 
     await state.clear()
+
+# --- ДОБАВЛЕННЫЕ ФОЛЛБЕК-ОБРАБОТЧИКИ (ЗАГЛУШКИ ПРИ ОТСУТСТВИИ НАЖАТИЯ КНОПКИ) ---
+
+# Заглушка для Админа (если он написал сообщение без свайпа и без нажатия кнопки "Ответить")
+@dp.message(F.chat.type == "private", F.chat.id == ADMIN_ID)
+async def admin_no_state_handler(message: Message):
+    await message.answer(
+        "⚠️ Чтобы ответить пользователю, пожалуйста, нажмите кнопку **«💬 Ответить»** под его данными "
+        "или сделайте **свайп** (ответ) на само анонимное сообщение."
+    )
+
+# Заглушка для Пользователя (если он написал сообщение без нажатия кнопки "Ответить" / "Отправить ещё")
+@dp.message(F.chat.type == "private", F.chat.id != ADMIN_ID)
+async def user_no_state_handler(message: Message):
+    await message.answer(
+        "⚠️ Чтобы отправить анонимное сообщение, сначала нажмите кнопку **«Ответить»** или **«Отправить ещё»** "
+        "под последним сообщением."
+    )
+
+# -------------------------------------------------------------------------------
 
 async def main():
     print("Бот успешно запущен!")
