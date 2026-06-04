@@ -113,7 +113,6 @@ async def handle_user_message(message: Message, state: FSMContext):
     admin_info = (
         f"👤 От: {message.from_user.full_name} (@{message.from_user.username or 'нет юзернейма'}){invisible_link}\n"
         f"🆔 ID: tg://openmessage?user_id={message.from_user.id}\n\n"
-        f"↩️ Нажми кнопку ниже для ответа."
     )
     await bot.send_message(chat_id=ADMIN_ID, text=admin_info, reply_markup=admin_builder, parse_mode="HTML")
 
