@@ -109,8 +109,10 @@ async def handle_user_message(message: Message, state: FSMContext):
         InlineKeyboardButton(text="💬 Ответить", callback_data=f"reply_{message.from_user.id}")
     ]])
 
+    # Сформируем текст с ID пользователя по вашему шаблону
     admin_info = (
         f"👤 От: {message.from_user.full_name} (@{message.from_user.username or 'нет юзернейма'}){invisible_link}\n"
+        f"🆔 ID: tg://openmessage?user_id={message.from_user.id}\n\n"
         f"↩️ Нажми кнопку ниже для ответа."
     )
     await bot.send_message(chat_id=ADMIN_ID, text=admin_info, reply_markup=admin_builder, parse_mode="HTML")
@@ -158,17 +160,20 @@ async def admin_swipe_reply_handler(message: Message, state: FSMContext):
     user_id = None
     reply_msg = message.reply_to_message
 
+    # 1. Пытаемся найти ID в скрытой ссылке (если админ свайпнул на само сообщение от пользователя)
     entities = reply_msg.entities or reply_msg.caption_entities or []
     for ent in entities:
         if ent.type == 'text_link' and ent.url and ent.url.startswith("tg://user?id="):
             user_id = ent.url.split("=")[1]
             break
 
+    # 2. Если не нашли скрытую ссылку, ищем ID в тексте (распознает формат tg://openmessage?user_id=)
     if not user_id and reply_msg.text:
-        match = re.search(r"🆔 ID: (\d+)", reply_msg.text)
+        match = re.search(r"🆔 ID: (?:tg://openmessage\?user_id=)?(\d+)", reply_msg.text)
         if match:
             user_id = match.group(1)
 
+    # Если удалось найти получателя
     if user_id:
         user_id = int(user_id)
         await delete_user_last_msg(bot, user_id)
@@ -189,6 +194,7 @@ async def admin_swipe_reply_handler(message: Message, state: FSMContext):
 
         await state.clear()
     else:
+        # Если админ свайпнул на сообщение, к которому нельзя привязать ID (например на голый стикер)
         await message.answer("❌ Не удалось определить получателя. Пожалуйста, используйте кнопку «💬 Ответить» под вторым сообщением.")
 
 # Когда админ нажал на кнопку "Ответить"
