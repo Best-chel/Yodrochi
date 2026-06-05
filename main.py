@@ -81,7 +81,7 @@ async def handle_user_message(message: Message, state: FSMContext):
         msg_text = (
             f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
             f"{message.html_text}\n\n"
-            "👉 <a href=\"https://t.me/anonim_the_best_bot?start=start\">anonim_bot</a>\n"
+            "👉 https://t.me/anonim_the_best_bot?start=start\n"
             "↩️ Свайпни для ответа."
         )
         await bot.send_message(chat_id=ADMIN_ID, text=msg_text, parse_mode="HTML", disable_web_page_preview=True)
@@ -90,7 +90,7 @@ async def handle_user_message(message: Message, state: FSMContext):
         new_caption = f"🏄‍♂️ У тебя новое анонимное сообщение!{invisible_link}\n\n"
         if caption:
             new_caption += f"{caption}\n\n"
-        new_caption += "👉 <a href=\"https://t.me/anonim_the_best_bot?start=start\">anonim_bot</a>\n"
+        new_caption += "👉 https://t.me/anonim_the_best_bot?start=start\n"
         new_caption += "↩️ Свайпни для ответа."
 
         await bot.copy_message(
